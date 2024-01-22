@@ -24,7 +24,7 @@ pub fn App() -> impl IntoView {
         <Stylesheet id="leptos" href="/pkg/leptos_start.css"/>
         <Title text="Rust chatbot"/>
 
-        <ChatArea conversation/>
+        <ChatArea />
         <TypeArea send/>
     }
 }
