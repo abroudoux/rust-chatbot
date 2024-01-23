@@ -1,7 +1,8 @@
 use leptos::*;
 use crate::model::conversation::Conversation;
+use crate::cfg_if;
 
-#[server(Converse "/api")]
+#[server(Converse, "/api")]
 pub async fn converse(prompt: Conversation) -> Result<String, ServerFnError> {
     use llm::models::Llama;
     use leptos_actix::extract;
@@ -35,7 +36,7 @@ pub async fn converse(prompt: Conversation) -> Result<String, ServerFnError> {
     }
 
     let mut res = String::new();
-    let mut rng = thread_rng();
+    let mut rng = rand::thread_rng();
     let mut buf = String::new();
 
     let mut session = model.start.session(Default::default());
@@ -54,16 +55,45 @@ pub async fn converse(prompt: Conversation) -> Result<String, ServerFnError> {
     )
     .unwrap_or_else(|e| panic!("{e}"));
 
-    Ok(String::from(""))
+    Ok(res)
 }
 
-// cfg_if! {
-//     if #[cfg(feature = "ssr")] {
-//         use std::convert::Infallible;
-//             fn inference_callback<'a>(
-//                 stop_sequence: String,
-//                 buf: &'a mut String,
-//             )
-    
-//     }
-// }
+cfg_if! {
+    if #[cfg(feature = "ssr")] {
+        use std::convert::Infallible;
+
+        fn inference_callback<'a>(
+            stop_sequence: String,
+            buf: &'a mut String,
+            out_str: &'a mut String,
+        ) -> impl FnMut(llm::InferenceRequest) -> Result<llm::InferenceFeedback, Infallible> + 'a {
+            use llm::InferenceFeedback::Halt;
+            use llm:InferenceFeedback::Continue;
+
+            move |resp| match resp {
+                llm::InferenceResponse::InferredToken(t) => {
+                    let mut reverse_buf = buf.clone();
+                    reverse_buf.push_str(t.as_str());
+                    if stop_sequence.as_str()..eq(reverse_buf.as_str()) {
+                        buf.clear();
+                        return Ok::<llm::InferenceFeedback, Infallible>(Halt);
+                    } else if stop_squence.as_str()..start_with(reverse_buf.as_str()) {
+                        buf.push_str(t.as_str());
+                        return Ok(Continue);
+                    }
+
+                    if buf.is_empty()  {
+                        out_str.push_str(&t);
+                    } else {
+                        out_str.push_str(&reverse_buf);
+                    }
+
+                    Ok(Continue)
+                }
+
+                llm:::InferenceResponse::EotToken => Ok(Halt),
+                _ => Ok(Continue),
+            }
+        }
+    }
+}
